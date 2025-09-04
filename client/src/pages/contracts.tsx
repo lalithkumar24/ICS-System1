@@ -191,7 +191,7 @@ export default function Contracts() {
     }
   };
 
-  const filteredContracts = contracts?.filter(contract =>
+  const filteredContracts = (contracts as any[])?.filter((contract: any) =>
     contract.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     contract.address?.toLowerCase().includes(searchTerm.toLowerCase())
   ) || [];
@@ -254,15 +254,15 @@ export default function Contracts() {
                   <File className="w-8 h-8 text-muted-foreground" />
                 </div>
                 <h3 className="text-lg font-medium text-foreground mb-2">
-                  {contracts?.length === 0 ? "No contracts uploaded" : "No contracts found"}
+                  {(contracts as any[])?.length === 0 ? "No contracts uploaded" : "No contracts found"}
                 </h3>
                 <p className="text-muted-foreground text-center mb-4">
-                  {contracts?.length === 0 
+                  {(contracts as any[])?.length === 0 
                     ? "Upload your first smart contract to start auditing"
                     : "Try adjusting your search terms"
                   }
                 </p>
-                {contracts?.length === 0 && (
+                {(contracts as any[])?.length === 0 && (
                   <Button onClick={() => setShowUploadModal(true)}>
                     <Plus className="w-4 h-4 mr-2" />
                     Upload Contract
@@ -270,7 +270,7 @@ export default function Contracts() {
                 )}
               </div>
             ) : (
-              filteredContracts.map((contract) => (
+              filteredContracts.map((contract: any) => (
                 <Card key={contract.id} className="hover:shadow-md transition-shadow">
                   <CardHeader>
                     <div className="flex items-center space-x-3">

@@ -49,31 +49,31 @@ export default function RiskAnalysis() {
   const riskData = [
     {
       label: "Critical",
-      count: riskDistribution?.critical || 0,
+      count: (riskDistribution as any)?.critical || 0,
       color: "bg-destructive",
-      percentage: riskDistribution?.critical ? 
-        Math.round((riskDistribution.critical / (riskDistribution.critical + riskDistribution.high + riskDistribution.medium + riskDistribution.low)) * 100) : 0,
+      percentage: (riskDistribution as any)?.critical ? 
+        Math.round(((riskDistribution as any).critical / ((riskDistribution as any).critical + (riskDistribution as any).high + (riskDistribution as any).medium + (riskDistribution as any).low)) * 100) : 0,
     },
     {
       label: "High",
-      count: riskDistribution?.high || 0,
+      count: (riskDistribution as any)?.high || 0,
       color: "bg-amber-500",
-      percentage: riskDistribution?.high ? 
-        Math.round((riskDistribution.high / (riskDistribution.critical + riskDistribution.high + riskDistribution.medium + riskDistribution.low)) * 100) : 0,
+      percentage: (riskDistribution as any)?.high ? 
+        Math.round(((riskDistribution as any).high / ((riskDistribution as any).critical + (riskDistribution as any).high + (riskDistribution as any).medium + (riskDistribution as any).low)) * 100) : 0,
     },
     {
       label: "Medium",
-      count: riskDistribution?.medium || 0,
+      count: (riskDistribution as any)?.medium || 0,
       color: "bg-amber-300",
-      percentage: riskDistribution?.medium ? 
-        Math.round((riskDistribution.medium / (riskDistribution.critical + riskDistribution.high + riskDistribution.medium + riskDistribution.low)) * 100) : 0,
+      percentage: (riskDistribution as any)?.medium ? 
+        Math.round(((riskDistribution as any).medium / ((riskDistribution as any).critical + (riskDistribution as any).high + (riskDistribution as any).medium + (riskDistribution as any).low)) * 100) : 0,
     },
     {
       label: "Low",
-      count: riskDistribution?.low || 0,
+      count: (riskDistribution as any)?.low || 0,
       color: "bg-emerald-500",
-      percentage: riskDistribution?.low ? 
-        Math.round((riskDistribution.low / (riskDistribution.critical + riskDistribution.high + riskDistribution.medium + riskDistribution.low)) * 100) : 0,
+      percentage: (riskDistribution as any)?.low ? 
+        Math.round(((riskDistribution as any).low / ((riskDistribution as any).critical + (riskDistribution as any).high + (riskDistribution as any).medium + (riskDistribution as any).low)) * 100) : 0,
     },
   ];
 

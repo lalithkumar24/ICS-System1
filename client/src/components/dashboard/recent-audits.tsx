@@ -66,7 +66,7 @@ export default function RecentAudits() {
     );
   }
 
-  const recentAudits = audits?.slice(0, 5) || [];
+  const recentAudits = (audits as any[])?.slice(0, 5) || [];
 
   return (
     <Card className="lg:col-span-2" data-testid="recent-audits-card">
@@ -116,7 +116,7 @@ export default function RecentAudits() {
                   </td>
                 </tr>
               ) : (
-                recentAudits.map((audit) => (
+                recentAudits.map((audit: any) => (
                   <tr 
                     key={audit.id} 
                     className="hover:bg-muted/30 transition-colors"

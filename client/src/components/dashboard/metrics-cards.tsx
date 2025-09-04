@@ -27,7 +27,7 @@ export default function MetricsCards() {
   const metricsData = [
     {
       title: "Total Audits",
-      value: metrics?.totalAudits || 0,
+      value: (metrics as any)?.totalAudits || 0,
       change: "+12.3%",
       changeType: "positive" as const,
       icon: ClipboardList,
@@ -35,7 +35,7 @@ export default function MetricsCards() {
     },
     {
       title: "High Risk Issues",
-      value: metrics?.highRiskIssues || 0,
+      value: (metrics as any)?.highRiskIssues || 0,
       change: "-8.7%",
       changeType: "negative" as const,
       icon: AlertTriangle,
@@ -43,7 +43,7 @@ export default function MetricsCards() {
     },
     {
       title: "Contracts Analyzed",
-      value: metrics?.contractsAnalyzed || 0,
+      value: (metrics as any)?.contractsAnalyzed || 0,
       change: "+5.4%",
       changeType: "positive" as const,
       icon: File,
@@ -51,7 +51,7 @@ export default function MetricsCards() {
     },
     {
       title: "Avg Risk Score",
-      value: metrics?.avgRiskScore?.toFixed(1) || "0.0",
+      value: (metrics as any)?.avgRiskScore?.toFixed(1) || "0.0",
       change: "-2.1%",
       changeType: "positive" as const,
       icon: TrendingUp,

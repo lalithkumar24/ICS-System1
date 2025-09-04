@@ -87,20 +87,20 @@ export default function Sidebar() {
       <div className="p-4 border-t border-border">
         <div className="flex items-center space-x-3">
           <Avatar className="w-8 h-8">
-            <AvatarImage src={user?.profileImageUrl || ""} />
+            <AvatarImage src={(user as any)?.profileImageUrl || ""} />
             <AvatarFallback className="bg-secondary text-secondary-foreground">
-              {user?.firstName?.[0] || user?.email?.[0]?.toUpperCase() || "U"}
+              {(user as any)?.firstName?.[0] || (user as any)?.email?.[0]?.toUpperCase() || "U"}
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-foreground truncate" data-testid="text-user-name">
-              {user?.firstName && user?.lastName 
-                ? `${user.firstName} ${user.lastName}`
-                : user?.email || "User"
+              {(user as any)?.firstName && (user as any)?.lastName 
+                ? `${(user as any).firstName} ${(user as any).lastName}`
+                : (user as any)?.email || "User"
               }
             </p>
             <p className="text-xs text-muted-foreground truncate">
-              {user?.role || "Auditor"}
+              {(user as any)?.role || "Auditor"}
             </p>
           </div>
           <Button 

@@ -31,7 +31,14 @@ export default function Transactions() {
   const { isAuthenticated, isLoading } = useAuth();
 
   const { data: transactions, isLoading: transactionsLoading, refetch } = useQuery({
-    queryKey: ["/api/transactions", { limit: 100 }],
+    queryKey: ["/api/transactions"],
+    queryFn: async () => {
+      const response = await fetch("/api/transactions?limit=100", {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch transactions");
+      return response.json();
+    },
   });
 
   const { data: highRiskTransactions, isLoading: highRiskLoading } = useQuery({
@@ -100,7 +107,7 @@ export default function Transactions() {
     }
   };
 
-  const filteredTransactions = transactions?.filter(tx => {
+  const filteredTransactions = (transactions as any[])?.filter((tx: any) => {
     const matchesSearch = tx.hash?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          tx.from_address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          tx.to_address?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -112,11 +119,11 @@ export default function Transactions() {
   }) || [];
 
   const riskCounts = {
-    total: transactions?.length || 0,
-    critical: transactions?.filter(tx => tx.risk_level === "critical").length || 0,
-    high: transactions?.filter(tx => tx.risk_level === "high").length || 0,
-    medium: transactions?.filter(tx => tx.risk_level === "medium").length || 0,
-    low: transactions?.filter(tx => tx.risk_level === "low").length || 0,
+    total: (transactions as any[])?.length || 0,
+    critical: (transactions as any[])?.filter((tx: any) => tx.risk_level === "critical").length || 0,
+    high: (transactions as any[])?.filter((tx: any) => tx.risk_level === "high").length || 0,
+    medium: (transactions as any[])?.filter((tx: any) => tx.risk_level === "medium").length || 0,
+    low: (transactions as any[])?.filter((tx: any) => tx.risk_level === "low").length || 0,
   };
 
   return (
@@ -288,7 +295,7 @@ export default function Transactions() {
                           </td>
                         </tr>
                       ) : (
-                        filteredTransactions.map((tx) => (
+                        filteredTransactions.map((tx: any) => (
                           <tr 
                             key={tx.id} 
                             className="hover:bg-muted/30 transition-colors"
@@ -380,7 +387,7 @@ export default function Transactions() {
                 <div className="px-6 py-4 border-t border-border">
                   <div className="flex items-center justify-between">
                     <p className="text-sm text-muted-foreground">
-                      Showing {filteredTransactions.length} of {transactions?.length || 0} transactions
+                      Showing {filteredTransactions.length} of {(transactions as any[])?.length || 0} transactions
                     </p>
                     <div className="flex items-center space-x-2">
                       <Button variant="outline" size="sm" disabled>

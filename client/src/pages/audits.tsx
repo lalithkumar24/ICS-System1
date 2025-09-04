@@ -122,7 +122,7 @@ export default function Audits() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {!audits || audits.length === 0 ? (
+                      {!audits || (audits as any[]).length === 0 ? (
                         <tr>
                           <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
                             <div className="flex flex-col items-center space-y-3">
@@ -138,7 +138,7 @@ export default function Audits() {
                           </td>
                         </tr>
                       ) : (
-                        audits.map((audit) => (
+                        (audits as any[]).map((audit: any) => (
                           <tr 
                             key={audit.id} 
                             className="hover:bg-muted/30 transition-colors"

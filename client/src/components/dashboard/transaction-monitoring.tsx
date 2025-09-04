@@ -8,7 +8,14 @@ import { formatDistanceToNow } from "date-fns";
 
 export default function TransactionMonitoring() {
   const { data: transactions, isLoading: transactionsLoading } = useQuery({
-    queryKey: ["/api/transactions", { limit: 10 }],
+    queryKey: ["/api/transactions"],
+    queryFn: async () => {
+      const response = await fetch("/api/transactions?limit=10", {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch transactions");
+      return response.json();
+    },
   });
 
   const { data: highRiskTransactions, isLoading: highRiskLoading } = useQuery({

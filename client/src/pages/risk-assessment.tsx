@@ -77,8 +77,8 @@ export default function RiskAssessment() {
   };
 
   const getOverallRiskLevel = () => {
-    if (!audits?.length) return "unknown";
-    const avgRisk = audits.reduce((sum, audit) => sum + getRiskScore(audit), 0) / audits.length;
+    if (!(audits as any[])?.length) return "unknown";
+    const avgRisk = (audits as any[]).reduce((sum: number, audit: any) => sum + getRiskScore(audit), 0) / (audits as any[]).length;
     if (avgRisk >= 8) return "critical";
     if (avgRisk >= 6) return "high";
     if (avgRisk >= 4) return "medium";
@@ -86,20 +86,20 @@ export default function RiskAssessment() {
   };
 
   const totalFindings = riskDistribution ? 
-    riskDistribution.critical + riskDistribution.high + riskDistribution.medium + riskDistribution.low : 0;
+    (riskDistribution as any).critical + (riskDistribution as any).high + (riskDistribution as any).medium + (riskDistribution as any).low : 0;
 
   const riskTrends = [
     {
       period: "This Month",
-      critical: riskDistribution?.critical || 0,
-      high: riskDistribution?.high || 0,
+      critical: (riskDistribution as any)?.critical || 0,
+      high: (riskDistribution as any)?.high || 0,
       change: -12,
       trend: "down"
     },
     {
       period: "Last Month", 
-      critical: (riskDistribution?.critical || 0) + 3,
-      high: (riskDistribution?.high || 0) + 8,
+      critical: ((riskDistribution as any)?.critical || 0) + 3,
+      high: ((riskDistribution as any)?.high || 0) + 8,
       change: 0,
       trend: "neutral"
     }
