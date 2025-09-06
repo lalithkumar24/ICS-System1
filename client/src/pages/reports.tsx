@@ -29,7 +29,8 @@ import {
   Calendar,
   User,
   BarChart3,
-  X
+  X,
+  Loader2
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -45,6 +46,7 @@ type ReportFormData = z.infer<typeof reportFormSchema>;
 export default function Reports() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [downloadingReports, setDownloadingReports] = useState<Set<number>>(new Set());
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
   const queryClient = useQueryClient();
@@ -100,6 +102,108 @@ export default function Reports() {
       });
     },
   });
+
+  // PDF Download function
+  const downloadPDF = async (auditId: number, reportTitle: string) => {
+    try {
+      setDownloadingReports(prev => new Set([...prev, auditId]));
+      
+      const response = await fetch(`/api/audits/${auditId}/report`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/pdf',
+        },
+        credentials: 'include', // Include cookies for authentication
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          toast({
+            title: "Unauthorized",
+            description: "You are logged out. Logging in again...",
+            variant: "destructive",
+          });
+          setTimeout(() => {
+            window.location.href = "/api/login";
+          }, 500);
+          return;
+        }
+        throw new Error(`Failed to download PDF: ${response.statusText}`);
+      }
+
+      // Get the PDF blob
+      const blob = await response.blob();
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `audit-${auditId}-${reportTitle.replace(/[^a-zA-Z0-9]/g, '-')}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      
+      // Cleanup
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast({
+        title: "Success",
+        description: "PDF downloaded successfully",
+      });
+    } catch (error) {
+      console.error('Download error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to download PDF report",
+        variant: "destructive",
+      });
+    } finally {
+      setDownloadingReports(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(auditId);
+        return newSet;
+      });
+    }
+  };
+
+  // View report function (opens PDF in new tab)
+  const viewReport = async (auditId: number) => {
+    try {
+      const response = await fetch(`/api/audits/${auditId}/report`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/pdf',
+        },
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          toast({
+            title: "Unauthorized",
+            description: "You are logged out. Logging in again...",
+            variant: "destructive",
+          });
+          setTimeout(() => {
+            window.location.href = "/api/login";
+          }, 500);
+          return;
+        }
+        throw new Error(`Failed to view PDF: ${response.statusText}`);
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, '_blank');
+    } catch (error) {
+      console.error('View error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to view PDF report",
+        variant: "destructive",
+      });
+    }
+  };
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -342,6 +446,7 @@ export default function Reports() {
                           variant="outline" 
                           size="sm" 
                           className="flex-1"
+                          onClick={() => viewReport(report.audit_id)}
                           data-testid={`button-view-${report.id}`}
                         >
                           <Eye className="w-4 h-4 mr-1" />
@@ -350,9 +455,15 @@ export default function Reports() {
                         <Button 
                           variant="outline" 
                           size="sm"
+                          onClick={() => downloadPDF(report.audit_id, report.title)}
+                          disabled={downloadingReports.has(report.audit_id)}
                           data-testid={`button-download-${report.id}`}
                         >
-                          <Download className="w-4 h-4" />
+                          {downloadingReports.has(report.audit_id) ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Download className="w-4 h-4" />
+                          )}
                         </Button>
                         <Button 
                           variant="outline" 

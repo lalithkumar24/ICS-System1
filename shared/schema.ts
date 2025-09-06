@@ -54,7 +54,8 @@ export const riskLevelEnum = pgEnum("risk_level", [
   "low",
   "medium",
   "high",
-  "critical"
+  "critical",
+  "informational"
 ]);
 
 // Contract type enum

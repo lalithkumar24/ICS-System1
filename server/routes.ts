@@ -10,7 +10,13 @@ import {
   insertAuditReportSchema 
 } from "@shared/schema";
 import { z } from "zod";
-import "dotenv/config"; 
+import "dotenv/config";
+import { exec } from "child_process";
+import fs from "fs";
+import path from "path";
+import solc from "solc";
+import PDFDocument from "pdfkit";
+
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup Auth0 authentication
@@ -123,8 +129,89 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to delete contract" });
     }
   });
-
   // Audit routes
+  app.post("/api/audits", requireAuth0, async (req, res) => {
+  try {
+    const { name,source_code } = req.body;
+    if (!name || !source_code) {
+      return res.status(400).json({ message: "Missing contract name or source code" });
+    }
+
+    // 1️⃣ Save temporary contract file
+    const filePath = path.join("/tmp", `${name}-${Date.now()}.sol`);
+    fs.writeFileSync(filePath, source_code);
+
+    // 2️⃣ Compile with solc
+    const input = {
+      language: "Solidity",
+      sources: { [`${name}.sol`]: { content: source_code } },
+      settings: { outputSelection: { "*": { "*": ["abi", "evm.bytecode", "metadata"] } } }
+    };
+    const output = JSON.parse(solc.compile(JSON.stringify(input)));
+    console.log("Solc output:", output);
+
+    if (output.errors?.some(e => e.severity === "error")) {
+      return res.status(400).json({ message: "Compilation failed", errors: output.errors });
+    }
+
+    // Store audit in DB
+    const audit = await storage.createAudit({
+      name: name,
+      status: "in_progress",
+      createdAt: new Date(),
+    });
+
+    // 3️⃣ Run Slither (static analyzer)
+    const jsonPath = filePath.replace(".sol", ".json");
+    // Corrected Logic
+    exec(`slither ${filePath} --json ${jsonPath}`, async (err, stdout, stderr) => {
+    // The new condition: only fail if an error occurred AND the output file was NOT created.
+    if (err && !fs.existsSync(jsonPath)) {
+      console.error("Slither analysis truly failed:", stderr);
+      await storage.updateAuditStatus(audit.id, "failed");
+      // Clean up the failed .sol file
+      fs.unlinkSync(filePath); 
+      return res.status(500).json({ message: "Slither analysis failed to run" });
+    }
+    // If we get here, the analysis was successful (with or without findings).
+    // It's now safe to read the report.
+    console.log("Slither analysis complete. Processing findings...");
+    const findings = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
+    const detectors = findings?.results?.detectors || [];
+
+    for (const issue of detectors) {
+          console.log("Processing issue:", issue);
+      await storage.createAuditFinding({
+        auditId: audit.id,
+        title: issue.check,
+        check: issue.check,
+        severity: issue.impact.toLowerCase(), // <-- FIX: Map the 'impact' value to the 'severity' field
+        confidence: issue.confidence,
+        description: issue.description,
+       });
+     }
+
+  // Mark audit as completed
+  await storage.updateAuditStatus(audit.id, "completed");
+
+  // Clean up temporary files
+  fs.unlinkSync(filePath);
+  fs.unlinkSync(jsonPath);
+
+  res.json({
+    message: "Audit completed",
+    auditId: audit.id,
+    compilerOutput: output.contracts,
+    slitherFindings: detectors,
+  });
+});
+    
+  } catch (error: any) {
+    console.error("Audit error:", error);
+    res.status(500).json({ message: "Audit failed", error: error.message });
+  }
+  });
+
   app.get('/api/audits', requireAuth0, async (req, res) => {
     try {
       const audits = await storage.getAudits();
@@ -148,29 +235,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch audit" });
     }
   });
-
-  app.post('/api/audits', requireAuth0, async (req: any, res) => {
-    try {
-      const user = await getAuth0User(req);
-      if (!user) {
-        return res.status(401).json({ message: "User not authenticated" });
-      }
-      const auditData = insertAuditSchema.parse({
-        ...req.body,
-        auditor_id: user.id,
-        started_at: new Date(),
-      });
-      const audit = await storage.createAudit(auditData);
-      res.status(201).json(audit);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid audit data", errors: error.errors });
-      }
-      console.error("Error creating audit:", error);
-      res.status(500).json({ message: "Failed to create audit" });
-    }
-  });
-
+ 
   app.put('/api/audits/:id', requireAuth0, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
@@ -274,6 +339,99 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch reports" });
     }
   });
+
+// Utility: Map severity → color
+const severityColors: Record<string, string> = {
+  High: "red",
+  Medium: "orange",
+  Low: "green",
+};
+
+app.get("/api/audits/:id/report", requireAuth0, async (req, res) => {
+  const auditId = parseInt(req.params.id);
+
+  const audit = await storage.getAudit(auditId);
+  if (!audit) return res.status(404).json({ message: "Audit not found" });
+
+  const findings = await storage.getAuditFindings(auditId);
+
+  // Create PDF
+  const doc = new PDFDocument({ margin: 50 });
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="audit-${auditId}.pdf"`
+  );
+  doc.pipe(res);
+
+  // === Branding Header ===
+  doc
+    .fillColor("#2C3E50")
+    .fontSize(24)
+    .text("🔐 Smart Contract Audit Report", { align: "center" });
+  doc.moveDown(0.5);
+
+  doc
+    .fontSize(10)
+    .fillColor("gray")
+    .text("Generated by Audit Platform", { align: "center" });
+  doc.moveDown(2);
+
+  // === Audit Metadata ===
+  doc
+    .fillColor("#000")
+    .fontSize(16)
+    .text("📄 Audit Details", { underline: true });
+  doc.moveDown();
+
+  doc.fontSize(12).text(`Audit ID: ${audit.id}`);
+  doc.text(`Contract Name: ${audit.name || "N/A"}`);
+  doc.text(`Status: ${audit.status}`);
+  doc.text(`Created At: ${new Date(audit.createdAt).toLocaleString()}`);
+  doc.moveDown(2);
+
+  // === Findings Section ===
+  doc
+    .fontSize(16)
+    .fillColor("#000")
+    .text("⚠️ Findings", { underline: true });
+  doc.moveDown();
+
+  if (findings.length === 0) {
+    doc.fontSize(12).fillColor("green").text("✅ No vulnerabilities found!");
+  } else {
+    findings.forEach((f, i) => {
+      doc
+        .fontSize(14)
+        .fillColor(severityColors[f.impact] || "#000")
+        .text(`${i + 1}. ${f.check} (${f.impact} Risk)`);
+
+      doc
+        .fontSize(11)
+        .fillColor("black")
+        .text(`Confidence: ${f.confidence}`, { indent: 20 });
+      doc
+        .fontSize(11)
+        .text(`Description: ${f.description}`, { indent: 20 });
+      doc.moveDown(1.2);
+    });
+  }
+
+  // === Footer Branding ===
+  doc.moveDown(3);
+  doc
+    .fontSize(10)
+    .fillColor("gray")
+    .text(
+      "© 2025 Audit Platform. All Rights Reserved.",
+      50,
+      doc.page.height - 50,
+      { align: "center" }
+    );
+
+  doc.end();
+});
+
 
   app.post('/api/reports', requireAuth0, async (req: any, res) => {
     try {

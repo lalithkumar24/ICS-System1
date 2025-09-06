@@ -152,6 +152,16 @@ export class DatabaseStorage implements IStorage {
       .returning();
     return updatedAudit;
   }
+async updateAuditStatus(auditId: number, status: "in_progress" | "completed" | "failed"): Promise<Audit> {
+  const [updatedAudit] = await db
+    .update(audits)
+    .set({ status: status, updated_at: new Date() })
+    .where(eq(audits.id, auditId))
+    .returning();
+  
+  return updatedAudit;
+}
+
   
   async deleteAudit(id: number): Promise<void> {
     await db.delete(audits).where(eq(audits.id, id));

@@ -72,7 +72,7 @@ export default function Contracts() {
 
   const uploadContractMutation = useMutation({
     mutationFn: async (data: ContractFormData & { source_code: string }) => {
-      const response = await apiRequest("POST", "/api/contracts", data);
+      const response = await apiRequest("POST", "/api/audits", data);
       return response.json();
     },
     onSuccess: () => {
@@ -80,7 +80,7 @@ export default function Contracts() {
         title: "Success",
         description: "Contract uploaded successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/contracts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/audits"] });
       setShowUploadModal(false);
       setSelectedFile(null);
       form.reset();

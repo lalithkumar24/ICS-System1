@@ -1,159 +1,99 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Check, Settings, Shield, FileText, Play, Pause } from "lucide-react";
+import { Check, Pause, Play, Shield, FileText, Settings } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
-export default function AuditWorkflow() {
-  const workflowSteps = [
+type AuditStep = {
+  id: number;
+  title: string;
+  description: string;
+  status: "pending" | "in_progress" | "completed" | "failed";
+};
+
+// Map status to icon
+function getStepIcon(status: string) {
+  switch (status) {
+    case "completed": return <Check className="text-green-600" />;
+    case "in_progress": return <Play className="text-blue-600 animate-pulse" />;
+    case "failed": return <Pause className="text-red-600" />;
+    default: return <Settings className="text-gray-400" />;
+  }
+}
+
+export default function AuditWorkflow({ auditId }: { auditId: number }) {
+  // Fetch a specific audit workflow from backend
+  const { data: audit, isLoading } = useQuery({
+    queryKey: ["/api/audits", auditId],
+    queryFn: async () => {
+      const res = await fetch(`/api/audits/${auditId}`);
+      if (!res.ok) throw new Error("Failed to fetch audit");
+      return res.json();
+    },
+    refetchInterval: 5000, // auto-refresh every 5s for live updates
+  });
+
+  if (isLoading) return <p>Loading workflow...</p>;
+
+  // Convert backend audit status to steps
+  const steps: AuditStep[] = [
     {
       id: 1,
       title: "Contract Upload",
-      status: "completed",
       description: "Upload smart contract source code",
+      status: audit?.status === "uploaded" || audit?.status === "in_progress" || audit?.status === "completed"
+        ? "completed"
+        : "pending",
     },
     {
       id: 2,
-      title: "Static Analysis",
-      status: "completed",
-      description: "Automated code analysis and vulnerability scanning",
+      title: "Compilation",
+      description: "Compile contract with Solidity compiler",
+      status: audit?.status === "compiled" || audit?.status === "in_progress" || audit?.status === "completed"
+        ? "completed"
+        : "pending",
     },
     {
       id: 3,
-      title: "Risk Assessment",
-      status: "in_progress",
-      description: "Comprehensive security risk evaluation",
+      title: "Static Analysis",
+      description: "Run Slither/Mythril vulnerability checks",
+      status: audit?.status === "in_progress" ? "in_progress"
+        : audit?.status === "completed" ? "completed"
+        : "pending",
     },
     {
       id: 4,
       title: "Report Generation",
-      status: "pending",
-      description: "Generate detailed audit report",
+      description: "Generate final audit report",
+      status: audit?.status === "completed" ? "completed" : "pending",
     },
   ];
 
-  const currentProgress = 65;
-
-  const getStepIcon = (status: string, index: number) => {
-    switch (status) {
-      case "completed":
-        return <Check className="w-4 h-4 text-white" />;
-      case "in_progress":
-        return <Settings className="w-4 h-4 text-primary-foreground animate-spin" />;
-      default:
-        return <span className="text-muted-foreground text-sm font-medium">{index + 1}</span>;
-    }
-  };
-
-  const getStepStyle = (status: string) => {
-    switch (status) {
-      case "completed":
-        return "w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center";
-      case "in_progress":
-        return "w-8 h-8 bg-primary rounded-full flex items-center justify-center";
-      default:
-        return "w-8 h-8 bg-muted rounded-full flex items-center justify-center";
-    }
-  };
-
-  const getConnectorStyle = (status: string, nextStatus?: string) => {
-    if (status === "completed") {
-      return "w-12 h-0.5 bg-emerald-500";
-    } else if (status === "in_progress") {
-      return "w-12 h-0.5 bg-primary";
-    }
-    return "w-12 h-0.5 bg-border";
-  };
-
   return (
-    <Card className="mb-8" data-testid="audit-workflow">
+    <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle>Active Audit Workflow</CardTitle>
-          <div className="flex items-center space-x-2">
-            <span className="text-sm text-muted-foreground">Progress:</span>
-            <div className="w-32 bg-muted rounded-full h-2">
-              <div 
-                className="bg-primary h-2 rounded-full transition-all duration-300" 
-                style={{ width: `${currentProgress}%` }}
-              ></div>
-            </div>
-            <span className="text-sm font-medium text-foreground" data-testid="progress-percentage">
-              {currentProgress}%
-            </span>
-          </div>
-        </div>
+        <CardTitle>Audit Workflow</CardTitle>
       </CardHeader>
-      
-      <CardContent>
-        {/* Workflow Steps */}
-        <div className="flex items-center justify-between mb-6 overflow-x-auto pb-4">
-          <div className="flex items-center space-x-4 min-w-max">
-            {workflowSteps.map((step, index) => (
-              <div key={step.id} className="flex items-center">
-                <div className="flex items-center space-x-2">
-                  <div className={getStepStyle(step.status)}>
-                    {getStepIcon(step.status, index)}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">
-                      {step.title}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {step.status === "completed" ? "Completed" :
-                       step.status === "in_progress" ? "In Progress" : "Pending"}
-                    </p>
-                  </div>
-                </div>
-                
-                {index < workflowSteps.length - 1 && (
-                  <div className={`mx-4 ${getConnectorStyle(step.status, workflowSteps[index + 1]?.status)}`}></div>
-                )}
-              </div>
-            ))}
-          </div>
-          
-          <div className="flex items-center space-x-2 ml-6">
-            <Button variant="outline" data-testid="button-pause-audit">
-              <Pause className="w-4 h-4 mr-2" />
-              Pause Audit
-            </Button>
-            <Button data-testid="button-view-details">
-              View Details
-            </Button>
-          </div>
-        </div>
-        
-        {/* Current Step Details */}
-        <div className="bg-muted/50 rounded-lg p-4">
-          <div className="flex items-start space-x-4">
-            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
-              <Shield className="text-primary" />
-            </div>
-            <div className="flex-1">
-              <h4 className="text-sm font-semibold text-foreground mb-2">
-                Risk Assessment - Contract: Sample Contract
-              </h4>
-              <p className="text-sm text-muted-foreground mb-3">
-                Analyzing smart contract for potential vulnerabilities, reentrancy attacks, and access control issues.
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="flex items-center space-x-2">
-                  <Check className="text-emerald-500 w-4 h-4" />
-                  <span className="text-xs text-foreground">Reentrancy Check</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Check className="text-emerald-500 w-4 h-4" />
-                  <span className="text-xs text-foreground">Access Control</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Settings className="text-primary w-4 h-4 animate-spin" />
-                  <span className="text-xs text-foreground">Oracle Manipulation</span>
-                </div>
+      <CardContent className="space-y-4">
+        {steps.map((step) => (
+          <div key={step.id} className="flex items-center justify-between p-2 border rounded-lg">
+            <div className="flex items-center space-x-3">
+              {getStepIcon(step.status)}
+              <div>
+                <p className="font-medium">{step.title}</p>
+                <p className="text-sm text-gray-500">{step.description}</p>
               </div>
             </div>
+            <Badge variant={
+              step.status === "completed" ? "default" :
+              step.status === "in_progress" ? "secondary" :
+              step.status === "failed" ? "destructive" : "outline"
+            }>
+              {step.status}
+            </Badge>
           </div>
-        </div>
+        ))}
       </CardContent>
     </Card>
   );
 }
+

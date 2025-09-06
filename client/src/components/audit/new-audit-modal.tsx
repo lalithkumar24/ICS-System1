@@ -35,6 +35,8 @@ import { CloudUpload, X } from "lucide-react";
 
 const auditFormSchema = z.object({
   contract_id: z.number().optional(),
+  contractName: z.string().optional(),
+  sourceCode: z.string().optional(),
   audit_type: z.string().min(1, "Audit type is required"),
   priority: z.string().min(1, "Priority is required"),
   notes: z.string().optional(),
@@ -73,21 +75,21 @@ export default function NewAuditModal({ isOpen, onClose }: NewAuditModalProps) {
     },
   });
 
+  // === Mutations ===
   const createAuditMutation = useMutation({
     mutationFn: async (data: AuditFormData) => {
-      const response = await apiRequest("POST", "/api/audits", data);
+      const response = await apiRequest("POST", "/api/contracts", data);
+      console.log("Create Audit Response:", response);
       return response.json();
     },
     onSuccess: () => {
       toast({
-        title: "Success",
-        description: "Audit created successfully",
+        title: "✅ Audit started",
+        description: "Contract analysis is running...",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/audits"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/contracts"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/metrics"] });
-      onClose();
-      form.reset();
-      setSelectedFile(null);
+      handleClose();
     },
     onError: (error) => {
       if (isUnauthorizedError(error as Error)) {
@@ -96,14 +98,12 @@ export default function NewAuditModal({ isOpen, onClose }: NewAuditModalProps) {
           description: "You are logged out. Logging in again...",
           variant: "destructive",
         });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
+        setTimeout(() => (window.location.href = "/api/login"), 500);
         return;
       }
       toast({
-        title: "Error",
-        description: "Failed to create audit",
+        title: "❌ Audit failed",
+        description: "Could not create audit",
         variant: "destructive",
       });
     },
@@ -111,12 +111,6 @@ export default function NewAuditModal({ isOpen, onClose }: NewAuditModalProps) {
 
   const uploadContractMutation = useMutation({
     mutationFn: async (file: File) => {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("name", file.name);
-      formData.append("network", "ethereum");
-      formData.append("contract_type", "other");
-      
       const response = await apiRequest("POST", "/api/contracts", {
         name: file.name,
         source_code: await file.text(),
@@ -129,30 +123,20 @@ export default function NewAuditModal({ isOpen, onClose }: NewAuditModalProps) {
     onSuccess: (contract) => {
       form.setValue("contract_id", contract.id);
       toast({
-        title: "Success",
-        description: "Contract uploaded successfully",
+        title: "✅ Contract uploaded",
+        description: "Contract is now linked to this audit",
       });
     },
-    onError: (error) => {
-      if (isUnauthorizedError(error as Error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
+    onError: () => {
       toast({
-        title: "Error",
-        description: "Failed to upload contract",
+        title: "❌ Upload failed",
+        description: "Could not upload contract",
         variant: "destructive",
       });
     },
   });
 
+  // === Handlers ===
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -171,18 +155,14 @@ export default function NewAuditModal({ isOpen, onClose }: NewAuditModalProps) {
     setSelectedFile(null);
   };
 
+  // === Render ===
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-auto" data-testid="new-audit-modal">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-auto">
         <DialogHeader>
           <div className="flex items-center justify-between">
-            <DialogTitle>Start New Audit</DialogTitle>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={handleClose}
-              data-testid="button-close-modal"
-            >
+            <DialogTitle>New Smart Contract Audit</DialogTitle>
+            <Button variant="ghost" size="sm" onClick={handleClose}>
               <X className="w-4 h-4" />
             </Button>
           </div>
@@ -190,22 +170,15 @@ export default function NewAuditModal({ isOpen, onClose }: NewAuditModalProps) {
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            {/* Contract Upload */}
+            {/* Contract Upload or Source Code */}
             <div>
               <FormLabel>Smart Contract</FormLabel>
               <div className="mt-2">
                 {selectedFile ? (
-                  <div className="flex items-center justify-between p-4 border border-border rounded-lg bg-muted/50">
+                  <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/50">
                     <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
-                        <CloudUpload className="w-4 h-4 text-primary" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-foreground">{selectedFile.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {(selectedFile.size / 1024).toFixed(1)} KB
-                        </p>
-                      </div>
+                      <CloudUpload className="w-5 h-5 text-primary" />
+                      <span className="text-sm">{selectedFile.name}</span>
                     </div>
                     <Button
                       type="button"
@@ -221,25 +194,53 @@ export default function NewAuditModal({ isOpen, onClose }: NewAuditModalProps) {
                   </div>
                 ) : (
                   <label className="block">
-                    <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer">
-                      <CloudUpload className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                      <p className="text-sm font-medium text-foreground mb-1">
-                        Drop your contract file here or click to browse
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Supports .sol, .vy, .zip files up to 10MB
-                      </p>
+                    <div className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:border-primary/50">
+                      <CloudUpload className="mx-auto h-10 w-10 text-muted-foreground mb-2" />
+                      <p className="text-sm">Drop a file or click to upload</p>
                     </div>
                     <input
                       type="file"
                       className="hidden"
                       accept=".sol,.vy,.zip"
                       onChange={handleFileSelect}
-                      data-testid="input-contract-upload"
                     />
                   </label>
                 )}
               </div>
+
+              {/* OR paste source code */}
+              {!selectedFile && (
+                <div className="mt-4 space-y-2">
+                  <FormField
+                    control={form.control}
+                    name="contractName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Contract Name</FormLabel>
+                        <FormControl>
+                          <Input placeholder="MyToken" {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="sourceCode"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Source Code</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Paste Solidity contract here..."
+                            rows={8}
+                            {...field}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Audit Configuration */}
@@ -252,7 +253,7 @@ export default function NewAuditModal({ isOpen, onClose }: NewAuditModalProps) {
                     <FormLabel>Audit Type</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
-                        <SelectTrigger data-testid="select-audit-type">
+                        <SelectTrigger>
                           <SelectValue placeholder="Select audit type" />
                         </SelectTrigger>
                       </FormControl>
@@ -263,7 +264,6 @@ export default function NewAuditModal({ isOpen, onClose }: NewAuditModalProps) {
                         <SelectItem value="custom">Custom Analysis</SelectItem>
                       </SelectContent>
                     </Select>
-                    <FormMessage />
                   </FormItem>
                 )}
               />
@@ -276,7 +276,7 @@ export default function NewAuditModal({ isOpen, onClose }: NewAuditModalProps) {
                     <FormLabel>Priority</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
-                        <SelectTrigger data-testid="select-priority">
+                        <SelectTrigger>
                           <SelectValue placeholder="Select priority" />
                         </SelectTrigger>
                       </FormControl>
@@ -286,7 +286,6 @@ export default function NewAuditModal({ isOpen, onClose }: NewAuditModalProps) {
                         <SelectItem value="critical">Critical</SelectItem>
                       </SelectContent>
                     </Select>
-                    <FormMessage />
                   </FormItem>
                 )}
               />
@@ -294,87 +293,34 @@ export default function NewAuditModal({ isOpen, onClose }: NewAuditModalProps) {
 
             {/* Analysis Options */}
             <div>
-              <FormLabel className="text-base font-medium">Analysis Options</FormLabel>
-              <div className="grid grid-cols-2 gap-3 mt-3">
-                <FormField
-                  control={form.control}
-                  name="configuration.reentrancy_check"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                          data-testid="checkbox-reentrancy"
-                        />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel className="text-sm">Reentrancy Detection</FormLabel>
-                      </div>
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="configuration.access_control"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                          data-testid="checkbox-access-control"
-                        />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel className="text-sm">Access Control Analysis</FormLabel>
-                      </div>
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="configuration.gas_optimization"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                          data-testid="checkbox-gas-optimization"
-                        />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel className="text-sm">Gas Optimization</FormLabel>
-                      </div>
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="configuration.oracle_manipulation"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                          data-testid="checkbox-oracle-manipulation"
-                        />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel className="text-sm">Oracle Manipulation</FormLabel>
-                      </div>
-                    </FormItem>
-                  )}
-                />
+              <FormLabel>Analysis Options</FormLabel>
+              <div className="grid grid-cols-2 gap-3 mt-2">
+                {(
+                  [
+                    ["configuration.reentrancy_check", "Reentrancy Detection"],
+                    ["configuration.access_control", "Access Control Analysis"],
+                    ["configuration.gas_optimization", "Gas Optimization"],
+                    ["configuration.oracle_manipulation", "Oracle Manipulation"],
+                  ] as const
+                ).map(([name, label]) => (
+                  <FormField
+                    key={name}
+                    control={form.control}
+                    name={name as any}
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center space-x-3">
+                        <FormControl>
+                          <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                        </FormControl>
+                        <FormLabel className="text-sm">{label}</FormLabel>
+                      </FormItem>
+                    )}
+                  />
+                ))}
               </div>
             </div>
 
-            {/* Additional Notes */}
+            {/* Notes */}
             <FormField
               control={form.control}
               name="notes"
@@ -382,32 +328,18 @@ export default function NewAuditModal({ isOpen, onClose }: NewAuditModalProps) {
                 <FormItem>
                   <FormLabel>Additional Notes</FormLabel>
                   <FormControl>
-                    <Textarea
-                      placeholder="Any specific concerns or areas of focus for this audit..."
-                      {...field}
-                      data-testid="textarea-notes"
-                    />
+                    <Textarea placeholder="Any specific concerns..." {...field} />
                   </FormControl>
-                  <FormMessage />
                 </FormItem>
               )}
             />
 
-            {/* Form Actions */}
-            <div className="flex items-center justify-end space-x-3 pt-4 border-t border-border">
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={handleClose}
-                data-testid="button-cancel"
-              >
+            {/* Actions */}
+            <div className="flex justify-end space-x-3 pt-4 border-t">
+              <Button type="button" variant="outline" onClick={handleClose}>
                 Cancel
               </Button>
-              <Button 
-                type="submit" 
-                disabled={createAuditMutation.isPending || uploadContractMutation.isPending}
-                data-testid="button-start-audit"
-              >
+              <Button type="submit" disabled={createAuditMutation.isPending}>
                 {createAuditMutation.isPending ? "Creating..." : "Start Audit"}
               </Button>
             </div>
@@ -417,3 +349,4 @@ export default function NewAuditModal({ isOpen, onClose }: NewAuditModalProps) {
     </Dialog>
   );
 }
+
