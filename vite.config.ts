@@ -21,6 +21,10 @@ export default defineConfig({
       "@": path.resolve(import.meta.dirname, "client", "src"),
       "@shared": path.resolve(import.meta.dirname, "shared"),
       "@assets": path.resolve(import.meta.dirname, "attached_assets"),
+      // 🔑 Add this line:
+      "@hookform/resolvers/zod": path.resolve(
+        "node_modules/@hookform/resolvers/zod/dist/zod.js"
+      ),
     },
   },
   root: path.resolve(import.meta.dirname, "client"),
@@ -35,3 +39,4 @@ export default defineConfig({
     },
   },
 });
+

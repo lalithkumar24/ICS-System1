@@ -10,6 +10,7 @@ import {
   insertAuditReportSchema 
 } from "@shared/schema";
 import { z } from "zod";
+import "dotenv/config"; 
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup Auth0 authentication

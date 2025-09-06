@@ -20,6 +20,7 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, sql, count } from "drizzle-orm";
+import "dotenv/config"; 
 
 export interface IStorage {
   // User operations (mandatory for Replit Auth)

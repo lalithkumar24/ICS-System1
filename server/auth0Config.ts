@@ -3,9 +3,16 @@ import type { Express, RequestHandler } from 'express';
 import session from 'express-session';
 import connectPg from 'connect-pg-simple';
 import { storage } from './storage';
+import "dotenv/config"; 
 
 // Auth0 configuration
 const getAuth0Config = (): ConfigParams => {
+  console.log('Environment check:');
+  console.log('AUTH0_SECRET:', process.env.AUTH0_SECRET ? 'Set' : 'Missing');
+  console.log('AUTH0_CLIENT_SECRET:', process.env.AUTH0_CLIENT_SECRET ? 'Set' : 'Missing');
+  console.log('AUTH0_CLIENT_ID:', process.env.AUTH0_CLIENT_ID ? 'Set' : 'Missing');
+  console.log('AUTH0_ISSUER_BASE_URL:', process.env.AUTH0_ISSUER_BASE_URL);
+
   if (!process.env.AUTH0_SECRET) {
     throw new Error('AUTH0_SECRET environment variable is required');
   }
@@ -15,27 +22,35 @@ const getAuth0Config = (): ConfigParams => {
   if (!process.env.AUTH0_CLIENT_ID) {
     throw new Error('AUTH0_CLIENT_ID environment variable is required');
   }
+  if (!process.env.AUTH0_CLIENT_SECRET) {
+    throw new Error('AUTH0_CLIENT_SECRET environment variable is required');
+  }
   if (!process.env.AUTH0_ISSUER_BASE_URL) {
     throw new Error('AUTH0_ISSUER_BASE_URL environment variable is required');
   }
 
   return {
-    authRequired: false,
-    auth0Logout: true,
-    secret: process.env.AUTH0_SECRET,
-    baseURL: process.env.AUTH0_BASE_URL,
-    clientID: process.env.AUTH0_CLIENT_ID,
-    issuerBaseURL: process.env.AUTH0_ISSUER_BASE_URL,
-    routes: {
-      login: '/api/login',
-      logout: '/api/logout',
-      callback: '/api/callback',
-      postLogoutRedirect: '/'
-    },
-    session: {
-      rollingDuration: 7 * 24 * 60 * 60, // 7 days in seconds
-      absoluteDuration: 7 * 24 * 60 * 60 * 60 // 7 days in seconds
-    }
+  authRequired: false,
+  auth0Logout: true,
+  secret: process.env.AUTH0_SECRET,
+  baseURL: process.env.AUTH0_BASE_URL,
+  clientID: process.env.AUTH0_CLIENT_ID,
+  clientSecret: process.env.AUTH0_CLIENT_SECRET,
+  issuerBaseURL: process.env.AUTH0_ISSUER_BASE_URL,
+  routes: {                          // ← NEW: Added this entire routes block
+    login: '/api/login',
+    logout: '/api/logout',
+    callback: '/api/callback'
+  },
+  authorizationParams: {
+    response_type: 'code',
+    response_mode: 'query',
+    scope: 'openid profile email',
+  },
+  session: {
+    rollingDuration: 7 * 24 * 60 * 60, // 7 days in seconds
+    absoluteDuration: 7 * 24 * 60 * 60 * 60 // 7 days in seconds
+  }
   };
 };
 
@@ -86,17 +101,18 @@ export async function setupAuth0(app: Express) {
   const config = getAuth0Config();
   app.use(auth(config));
 
-  // Custom callback handler to upsert user in database
-  app.get('/api/callback', async (req, res, next) => {
-    if (req.oidc.isAuthenticated() && req.oidc.user) {
-      try {
-        await upsertAuth0User(req.oidc.user);
-      } catch (error) {
-        console.error('Error upserting Auth0 user:', error);
-      }
+  // Handle user creation after authentication
+  app.use((req, res, next) => {
+    if (req.oidc.isAuthenticated() && req.oidc.user && !req.session.userProcessed) {
+      upsertAuth0User(req.oidc.user)
+        .then(() => {
+          req.session.userProcessed = true;
+        })
+        .catch(error => {
+          console.error('Error upserting Auth0 user:', error);
+        });
     }
-    // Redirect to home page after successful authentication
-    res.redirect('/');
+    next();
   });
 }
 
