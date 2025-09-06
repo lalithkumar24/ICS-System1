@@ -1,8 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, isAuthenticated } from "./replitAuth";
-import { setupLocalAuth, isLocalAuthenticated } from "./localAuth";
+import { setupAuth0, requireAuth0, getAuth0User } from "./auth0Config";
 import { 
   insertSmartContractSchema, 
   insertAuditSchema, 
@@ -13,26 +12,17 @@ import {
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Auth middleware - use local auth for development
-  const isLocalDev = process.env.NODE_ENV === 'development' && process.env.USE_LOCAL_AUTH === 'true';
-  
-  if (isLocalDev) {
-    console.log('🔧 Using local development authentication');
-    await setupLocalAuth(app);
-  } else {
-    console.log('🔐 Using Replit authentication');
-    await setupAuth(app);
-  }
-  
-  // Choose the appropriate auth middleware
-  const authMiddleware = isLocalDev ? isLocalAuthenticated : isAuthenticated;
+  // Setup Auth0 authentication
+  console.log('🔐 Using Auth0 authentication');
+  await setupAuth0(app);
 
   // Auth routes
-  app.get('/api/auth/user', authMiddleware, async (req: any, res) => {
+  app.get('/api/auth/user', requireAuth0, async (req: any, res) => {
     try {
-      // Handle both local and Replit auth user formats
-      const userId = isLocalDev ? req.user.id : req.user.claims.sub;
-      const user = await storage.getUser(userId);
+      const user = await getAuth0User(req);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
       res.json(user);
     } catch (error) {
       console.error("Error fetching user:", error);
@@ -41,7 +31,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Dashboard routes
-  app.get('/api/dashboard/metrics', authMiddleware, async (req, res) => {
+  app.get('/api/dashboard/metrics', requireAuth0, async (req, res) => {
     try {
       const metrics = await storage.getDashboardMetrics();
       res.json(metrics);
@@ -51,7 +41,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/dashboard/risk-distribution', authMiddleware, async (req, res) => {
+  app.get('/api/dashboard/risk-distribution', requireAuth0, async (req, res) => {
     try {
       const riskDistribution = await storage.getRiskDistribution();
       res.json(riskDistribution);
@@ -62,7 +52,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Smart Contract routes
-  app.get('/api/contracts', authMiddleware, async (req, res) => {
+  app.get('/api/contracts', requireAuth0, async (req, res) => {
     try {
       const contracts = await storage.getSmartContracts();
       res.json(contracts);
@@ -72,7 +62,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/contracts/:id', authMiddleware, async (req, res) => {
+  app.get('/api/contracts/:id', requireAuth0, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const contract = await storage.getSmartContract(id);
@@ -86,12 +76,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/contracts', authMiddleware, async (req: any, res) => {
+  app.post('/api/contracts', requireAuth0, async (req: any, res) => {
     try {
-      const userId = isLocalDev ? req.user.id : req.user.claims.sub;
+      const user = await getAuth0User(req);
+      if (!user) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
       const contractData = insertSmartContractSchema.parse({
         ...req.body,
-        uploaded_by: userId,
+        uploaded_by: user.id,
       });
       const contract = await storage.createSmartContract(contractData);
       res.status(201).json(contract);
@@ -104,7 +97,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/contracts/:id', authMiddleware, async (req, res) => {
+  app.put('/api/contracts/:id', requireAuth0, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const contractData = insertSmartContractSchema.partial().parse(req.body);
@@ -119,7 +112,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/contracts/:id', authMiddleware, async (req, res) => {
+  app.delete('/api/contracts/:id', requireAuth0, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       await storage.deleteSmartContract(id);
@@ -131,7 +124,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Audit routes
-  app.get('/api/audits', authMiddleware, async (req, res) => {
+  app.get('/api/audits', requireAuth0, async (req, res) => {
     try {
       const audits = await storage.getAudits();
       res.json(audits);
@@ -141,7 +134,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/audits/:id', authMiddleware, async (req, res) => {
+  app.get('/api/audits/:id', requireAuth0, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const audit = await storage.getAudit(id);
@@ -155,12 +148,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/audits', authMiddleware, async (req: any, res) => {
+  app.post('/api/audits', requireAuth0, async (req: any, res) => {
     try {
-      const userId = isLocalDev ? req.user.id : req.user.claims.sub;
+      const user = await getAuth0User(req);
+      if (!user) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
       const auditData = insertAuditSchema.parse({
         ...req.body,
-        auditor_id: userId,
+        auditor_id: user.id,
         started_at: new Date(),
       });
       const audit = await storage.createAudit(auditData);
@@ -174,7 +170,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/audits/:id', authMiddleware, async (req, res) => {
+  app.put('/api/audits/:id', requireAuth0, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const auditData = insertAuditSchema.partial().parse(req.body);
@@ -189,7 +185,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/audits/:id', authMiddleware, async (req, res) => {
+  app.delete('/api/audits/:id', requireAuth0, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       await storage.deleteAudit(id);
@@ -201,7 +197,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Audit findings routes
-  app.get('/api/audits/:auditId/findings', authMiddleware, async (req, res) => {
+  app.get('/api/audits/:auditId/findings', requireAuth0, async (req, res) => {
     try {
       const auditId = parseInt(req.params.auditId);
       const findings = await storage.getAuditFindings(auditId);
@@ -212,7 +208,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/audits/:auditId/findings', authMiddleware, async (req, res) => {
+  app.post('/api/audits/:auditId/findings', requireAuth0, async (req, res) => {
     try {
       const auditId = parseInt(req.params.auditId);
       const findingData = insertAuditFindingSchema.parse({
@@ -231,7 +227,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Transaction routes
-  app.get('/api/transactions', authMiddleware, async (req, res) => {
+  app.get('/api/transactions', requireAuth0, async (req, res) => {
     try {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
       const transactions = await storage.getTransactions(limit);
@@ -242,7 +238,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/transactions/high-risk', authMiddleware, async (req, res) => {
+  app.get('/api/transactions/high-risk', requireAuth0, async (req, res) => {
     try {
       const transactions = await storage.getHighRiskTransactions();
       res.json(transactions);
@@ -252,7 +248,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/transactions', authMiddleware, async (req, res) => {
+  app.post('/api/transactions', requireAuth0, async (req, res) => {
     try {
       const transactionData = insertTransactionSchema.parse(req.body);
       const transaction = await storage.createTransaction(transactionData);
@@ -267,7 +263,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Report routes
-  app.get('/api/reports', authMiddleware, async (req, res) => {
+  app.get('/api/reports', requireAuth0, async (req, res) => {
     try {
       const auditId = req.query.auditId ? parseInt(req.query.auditId as string) : undefined;
       const reports = await storage.getAuditReports(auditId);
@@ -278,12 +274,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/reports', authMiddleware, async (req: any, res) => {
+  app.post('/api/reports', requireAuth0, async (req: any, res) => {
     try {
-      const userId = isLocalDev ? req.user.id : req.user.claims.sub;
+      const user = await getAuth0User(req);
+      if (!user) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
       const reportData = insertAuditReportSchema.parse({
         ...req.body,
-        generated_by: userId,
+        generated_by: user.id,
       });
       const report = await storage.createAuditReport(reportData);
       res.status(201).json(report);
